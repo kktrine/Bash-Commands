@@ -1,10 +1,10 @@
 package postgresql
 
 import (
+	"errors"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"os"
 	"time"
 )
 
@@ -23,8 +23,8 @@ type Outputs struct {
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 }
 
-func NewPostgresRepository() *Postgres {
-	db, err := gorm.Open(postgres.Open(os.Getenv("POSTGRES")), &gorm.Config{
+func NewPostgresRepository(bdAttributes string) *Postgres {
+	db, err := gorm.Open(postgres.Open(bdAttributes), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 
@@ -39,4 +39,16 @@ func NewPostgresRepository() *Postgres {
 		panic("can't migrate databases")
 	}
 	return &Postgres{db}
+}
+
+func (p *Postgres) Stop() error {
+	val, err := p.Db.DB()
+	if err != nil {
+		return errors.New("failed to get database; error: " + err.Error())
+	}
+	if err := val.Close(); err != nil {
+		return errors.New("failed to close database connection; error: " + err.Error())
+	}
+
+	return nil
 }

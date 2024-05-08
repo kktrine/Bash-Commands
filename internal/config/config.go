@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	LogFilePath string `yaml:"log_file_path" env-required:"true"`
+	Postgres    string `yaml:"postgres-attributes" env-required:"true"`
 	HTTPServer  `yaml:"http_server"`
 }
 
