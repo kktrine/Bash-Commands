@@ -20,4 +20,10 @@ func main() {
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 	router.Use(mwlogger.New(log))
+
+	router.Route("/command", func(r chi.Router) {
+		// TODO: add POST
+		//r.Post("/", save.New(log, storage))
+		// TODO: add DELETE /url/{id}
+	})
 }
