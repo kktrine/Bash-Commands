@@ -2,6 +2,7 @@ package server
 
 import (
 	"bash-commands/internal/storage"
+	"bash-commands/server/post"
 	"context"
 	"errors"
 	"log/slog"
@@ -11,29 +12,33 @@ import (
 )
 
 type Server struct {
-	server *http.Server
-	mux    *http.ServeMux
-	logger *slog.Logger
-	st     *storage.Storage
+	server             *http.Server
+	mux                *http.ServeMux
+	logger             *slog.Logger
+	st                 *storage.Storage
+	postCommandHandler http.HandlerFunc
 }
 
 func NewServer(log *slog.Logger, st *storage.Storage) *Server {
 	srv := Server{logger: log, mux: http.NewServeMux(), st: st}
 	srv.server = &http.Server{Handler: srv.mux}
 
-	srv.mux.HandleFunc("/", mainHandler)
+	srv.postCommandHandler = post.NewPoster(srv.logger, srv.st)
+
+	srv.mux.HandleFunc("/", srv.mainHandler)
 	srv.server.Handler = srv.recoverer(srv.server.Handler)
 	srv.server.Handler = srv.logRequest(srv.server.Handler)
 	srv.server = &http.Server{Handler: srv.server.Handler}
+
 	return &srv
 }
 
-func mainHandler(w http.ResponseWriter, r *http.Request) {
+func (s Server) mainHandler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == "GET" && r.URL.Path == "/":
 		getHandler(w, r)
 	case r.Method == "POST" && r.URL.Path == "/":
-		postHandler(w, r)
+		s.postCommandHandler(w, r)
 	case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/"):
 		deleteHandler(w, r)
 	default:
@@ -68,7 +73,7 @@ func (s Server) recoverer(next http.Handler) http.Handler {
 		defer func() {
 			if err := recover(); err != nil {
 				s.logger.Error("Возникла ошибка: %v", err)
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				http.Error(w, "Internal Server Error (recover)", http.StatusInternalServerError)
 			}
 		}()
 		next.ServeHTTP(w, r)
@@ -76,6 +81,10 @@ func (s Server) recoverer(next http.Handler) http.Handler {
 }
 
 func (s Server) Stop(ctx context.Context) error {
+	err := s.st.Stop()
+	if err != nil {
+		s.logger.Error("error stopping DB connection: " + err.Error())
+	}
 	return s.server.Shutdown(ctx)
 }
 

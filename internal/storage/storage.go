@@ -2,7 +2,6 @@ package storage
 
 import (
 	"bash-commands/internal/storage/postgresql"
-	"errors"
 )
 
 type Storage struct {
@@ -15,14 +14,16 @@ func New(db string) *Storage {
 	return &st
 }
 
-func (s Storage) ErrCommandExists() error { return errors.New("command exists") }
+func (s Storage) Post(command string) (int64, error) {
+	return s.db.InsertCommand(command)
 
-func (s Storage) Save(command string) (int, error) {
+}
+
+func (s Storage) Run(command string) (int64, error) {
 	//TODO: impl
 	return 0, nil
 }
 
-func (s Storage) Run(command string) (int, error) {
-	//TODO: impl
-	return 0, nil
+func (s Storage) Stop() error {
+	return s.db.Stop()
 }
