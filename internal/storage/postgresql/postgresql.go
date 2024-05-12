@@ -1,54 +1,61 @@
 package postgresql
 
 import (
-	"errors"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	"database/sql"
+	_ "github.com/lib/pq"
+	"log"
 	"time"
 )
 
 type Postgres struct {
-	Db *gorm.DB
+	Db *sql.DB
 }
 
 type Command struct {
-	Id      int    `gorm:"primary_key;auto_increment"`
-	Command string `gorm:"type:text"`
+	Id      int
+	Command string
 }
 
 type Outputs struct {
-	CommandId int       `gorm:"foreignKey:id;references:id"`
-	Data      string    `gorm:"type:text;not null"`
-	CreatedAt time.Time `gorm:"autoCreateTime"`
+	CommandId int
+	Pid       int
+	Data      string
+	CreatedAt time.Time
 }
 
 func NewPostgresRepository(bdAttributes string) *Postgres {
-	db, err := gorm.Open(postgres.Open(bdAttributes), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-
-	rawDB, _ := db.DB()
-	rawDB.SetMaxOpenConns(128)
-	rawDB.SetMaxIdleConns(256)
-
+	db, err := sql.Open("postgres", bdAttributes)
 	if err != nil {
-		panic("couldn't connect to database: " + err.Error())
+		panic(err)
 	}
-	if err := db.AutoMigrate(&Command{}, &Outputs{}); err != nil {
-		panic("can't migrate databases")
+
+	err = db.Ping()
+	if err != nil {
+		log.Fatal(err)
 	}
-	return &Postgres{db}
+
+	createTable := `
+	CREATE TABLE IF NOT EXISTS command (
+		id SERIAL PRIMARY KEY,
+		command TEXT UNIQUE 
+	);`
+	_, err = db.Exec(createTable)
+	if err != nil {
+		panic(err)
+	}
+
+	return &Postgres{Db: db}
+}
+
+func (p *Postgres) InsertCommand(command string) error {
+	tx, err := p.Db.Begin()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("INSERT INTO command (command) values ($1);", command)
+
 }
 
 func (p *Postgres) Stop() error {
-	val, err := p.Db.DB()
-	if err != nil {
-		return errors.New("failed to get database; error: " + err.Error())
-	}
-	if err := val.Close(); err != nil {
-		return errors.New("failed to close database connection; error: " + err.Error())
-	}
-
-	return nil
+	return p.Db.Close()
 }

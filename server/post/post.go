@@ -1,10 +1,9 @@
-package save
+package post
 
 import (
-	"bash-commands/internal/storage"
+	"bash-commands/server/reqid"
 	"encoding/json"
 	"errors"
-	"github.com/go-chi/chi/v5/middleware"
 	"log/slog"
 	"net/http"
 )
@@ -19,21 +18,22 @@ type Response struct {
 	ID    int    `json:"id,omitempty"`
 }
 
-type CommandSaver interface {
-	Save(command string) (int, error)
+type CommandPoster interface {
+	Post(command string) (int, error)
 	Run(command string) (int, error)
+	ErrCommandExists() error
 }
 
-func NewSaver(log *slog.Logger, saver CommandSaver) http.HandlerFunc {
+func NewPoster(log *slog.Logger, poster CommandPoster) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		//TODO impl
-		w.WriteHeader(http.StatusNotImplemented)
-		return
+		////TODO impl
+		//w.WriteHeader(http.StatusNotImplemented)
+		//return
 
-		const op = "handlers.url.save.NewSaver"
+		const op = "handlers.url.post.NewPoster"
 		logger := log.With(
 			slog.String("op", op),
-			slog.String("request_id", middleware.GetReqID(r.Context())),
+			slog.String("request_id", reqid.GetRequestId(r.Context())),
 		)
 
 		var req Request
@@ -45,21 +45,21 @@ func NewSaver(log *slog.Logger, saver CommandSaver) http.HandlerFunc {
 			return
 		}
 
-		id, err := saver.Save(req.Command)
-		if errors.Is(err, storage.ErrCommandExists) {
-			logger.Error("failed to save command", "error", err)
+		id, err := poster.Post(req.Command)
+		if errors.Is(err, poster.ErrCommandExists()) {
+			logger.Error("failed to post command", "error", err)
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(&Response{Error: "command already exists"})
 			return
 		}
 		if err != nil {
-			logger.Error("failed to save command", "error", err)
+			logger.Error("failed to post command", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(&Response{Error: "failed to save command"})
+			json.NewEncoder(w).Encode(&Response{Error: "failed to post command"})
 			return
 		}
 
-		pid, err := saver.Run(req.Command)
+		pid, err := poster.Run(req.Command)
 		if err != nil {
 			logger.Error("failed to run command", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
