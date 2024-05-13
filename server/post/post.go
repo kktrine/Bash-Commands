@@ -36,7 +36,7 @@ func NewPoster(log *slog.Logger, poster CommandPoster) http.HandlerFunc {
 		var req Request
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
-			logger.Error("failed to parse request + " + "error: " + err.Error())
+			logger.Error("failed to parse request " + "error: " + err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(&Response{Error: "failed to parse request"})
 			return

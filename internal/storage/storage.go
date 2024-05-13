@@ -20,8 +20,7 @@ func (s Storage) Post(command string) (int64, error) {
 }
 
 func (s Storage) Run(command string) (int64, error) {
-	//TODO: impl
-	return 0, nil
+	return s.db.RunCommandByText(command)
 }
 
 func (s Storage) Stop() error {

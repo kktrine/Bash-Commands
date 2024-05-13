@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Server struct {
@@ -42,7 +43,7 @@ func (s Server) mainHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/"):
 		deleteHandler(w, r)
 	default:
-		http.Error(w, "Method Not Implemented", http.StatusNotImplemented)
+		http.Error(w, "Method Not Exist", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -57,14 +58,16 @@ func (s Server) Start(addr string) {
 
 func (s Server) logRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t := time.Now()
+		next.ServeHTTP(w, r)
 		s.logger.Info(
 			r.Method + " " +
 				r.URL.Path + " " +
 				r.RemoteAddr + " " +
-				r.UserAgent() + " " +
-				r.RequestURI,
+				r.UserAgent() +
+				r.RequestURI +
+				time.Since(t).String(),
 		)
-		next.ServeHTTP(w, r)
 	})
 }
 
@@ -72,7 +75,7 @@ func (s Server) recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				s.logger.Error("Возникла ошибка: %v", err)
+				s.logger.Error("Возникла ошибка: %v ", err)
 				http.Error(w, "Internal Server Error (recover)", http.StatusInternalServerError)
 			}
 		}()
