@@ -22,7 +22,7 @@ func main() {
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	//test := post.NewPoster(log, st)
+	//test := post_new_command.NewPoster(log, st)
 	//_ = test
 	// Ожидание сигнала завершения
 	<-done

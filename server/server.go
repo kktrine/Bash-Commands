@@ -2,7 +2,7 @@ package server
 
 import (
 	"bash-commands/internal/storage"
-	"bash-commands/server/post"
+	"bash-commands/server/post_new_command"
 	"context"
 	"errors"
 	"log/slog"
@@ -24,7 +24,7 @@ func NewServer(log *slog.Logger, st *storage.Storage) *Server {
 	srv := Server{logger: log, mux: http.NewServeMux(), st: st}
 	srv.server = &http.Server{Handler: srv.mux}
 
-	srv.postCommandHandler = post.NewPoster(srv.logger, srv.st)
+	srv.postCommandHandler = post_new_command.NewPoster(srv.logger, srv.st)
 
 	srv.mux.HandleFunc("/", srv.mainHandler)
 	srv.server.Handler = srv.recoverer(srv.server.Handler)
@@ -40,6 +40,8 @@ func (s Server) mainHandler(w http.ResponseWriter, r *http.Request) {
 		getHandler(w, r)
 	case r.Method == "POST" && r.URL.Path == "/":
 		s.postCommandHandler(w, r)
+	case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/"):
+		http.Error(w, "Method Not Implemented", http.StatusNotImplemented)
 	case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/"):
 		deleteHandler(w, r)
 	default:

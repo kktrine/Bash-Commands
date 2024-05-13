@@ -29,6 +29,13 @@ type Outputs struct {
 	Output    string
 }
 
+type CommandRunResult struct {
+	Id           int64
+	Pid          int
+	Output       string
+	OutputErrors string
+}
+
 func NewPostgresRepository(bdAttributes string) *Postgres {
 	db, err := sql.Open("postgres", bdAttributes)
 	if err != nil {
@@ -75,7 +82,7 @@ func NewPostgresRepository(bdAttributes string) *Postgres {
 	return &Postgres{Db: db}
 }
 
-func (p *Postgres) InsertCommand(command string) (int64, error) {
+func (p Postgres) InsertCommand(command string) (int64, error) {
 	tx, err := p.Db.Begin()
 	if err != nil {
 		return 0, err
@@ -103,74 +110,71 @@ func (p *Postgres) InsertCommand(command string) (int64, error) {
 	return id, nil
 }
 
-func (p Postgres) ExecCommand(id int64, command string) (int64, error) {
+func (p Postgres) ExecCommand(id int64, command string) (*CommandRunResult, error) {
 	tx, err := p.Db.Begin()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	cmd := exec.Command("bash", "-c", command)
 	pid := cmd.Process.Pid
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
-		return 0, err
+		return nil, err
 	}
-
+	var stdoutStr, stderrStr string
 	go func(stdout io.Reader) {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			tx.Exec("INSERT INTO outputs (command_id, pid, output) values ($1, $2, $3);", id, pid, scanner.Text())
+			line := scanner.Text()
+			stdoutStr += line + "\n"
+			tx.Exec("INSERT INTO outputs (command_id, pid, output) values ($1, $2, $3);",
+				id, pid, line)
 		}
 	}(stdout)
 
 	go func(stderr io.Reader) {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			tx.Exec("INSERT INTO outputs (command_id, pid, output) values ($1, $2, $3);", id, pid, scanner.Text())
+			line := scanner.Text()
+			stderrStr += line + "\n"
+			tx.Exec("INSERT INTO outputs (command_id, pid, output) values ($1, $2, $3);",
+				id, pid, line)
 		}
 	}(stderr)
 
 	if err := cmd.Wait(); err != nil {
 		fmt.Println("Ошибка выполнения команды:", err)
-		return 0, err
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return 0, err
+		return nil, err
 	}
-	return int64(pid), nil
+	return &CommandRunResult{
+		Id:           id,
+		Pid:          pid,
+		Output:       stdoutStr,
+		OutputErrors: stderrStr,
+	}, nil
 }
 
-func (p *Postgres) RunCommandByText(command string) (int64, error) {
-	var id int64
-	res := p.Db.QueryRow("Select id from commands where command = $1", command)
-	err := res.Err()
-	if err != nil {
-		return 0, err
-	}
-	err = res.Scan(&id)
-	if err != nil {
-		return 0, err
-	}
-	return p.ExecCommand(id, command)
-}
-
-func (p *Postgres) RunCommandById(id int64) (int64, error) {
+func (p Postgres) RunCommandById(id int64) (*CommandRunResult, error) {
 	var command string
 	res := p.Db.QueryRow("Select command from commands where id = $1", id)
 	err := res.Err()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	err = res.Scan(&command)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	return p.ExecCommand(id, command)
