@@ -3,6 +3,7 @@ package storage
 import (
 	"bash-commands/internal/storage/postgresql"
 	"bash-commands/server/post_new_command"
+	"bash-commands/server/post_run_command"
 )
 
 type Storage struct {
@@ -22,6 +23,9 @@ func (s Storage) Post(command string) (*post_new_command.Response, error) {
 		return nil, err
 	}
 	res, err := s.db.ExecCommand(id, command)
+	if err != nil {
+		return nil, err
+	}
 	return &post_new_command.Response{
 		PID:           res.Pid,
 		ID:            res.Id,
@@ -30,12 +34,12 @@ func (s Storage) Post(command string) (*post_new_command.Response, error) {
 	}, nil
 }
 
-func (s Storage) Run(id int64) (*post_new_command.Response, error) {
+func (s Storage) Run(id int64) (*post_run_command.Response, error) {
 	res, err := s.db.RunCommandById(id)
 	if err != nil {
 		return nil, err
 	}
-	return &post_new_command.Response{
+	return &post_run_command.Response{
 		PID:           res.Pid,
 		ID:            res.Id,
 		Output:        res.Output,

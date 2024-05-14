@@ -116,7 +116,7 @@ func (p Postgres) ExecCommand(id int64, command string) (*CommandRunResult, erro
 		return nil, err
 	}
 	cmd := exec.Command("bash", "-c", command)
-	pid := cmd.Process.Pid
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -128,6 +128,7 @@ func (p Postgres) ExecCommand(id int64, command string) (*CommandRunResult, erro
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
+	pid := cmd.Process.Pid
 	var stdoutStr, stderrStr string
 	go func(stdout io.Reader) {
 		scanner := bufio.NewScanner(stdout)
