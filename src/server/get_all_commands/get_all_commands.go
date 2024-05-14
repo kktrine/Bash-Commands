@@ -18,7 +18,7 @@ type Command struct {
 }
 
 type CommandsGetter interface {
-	Get() (*Response, error)
+	GetAll() (*Response, error)
 }
 
 func NewGetter(log *slog.Logger, getter CommandsGetter) http.HandlerFunc {
@@ -30,7 +30,7 @@ func NewGetter(log *slog.Logger, getter CommandsGetter) http.HandlerFunc {
 			slog.String("request_id", reqid.GetRequestId(r.Context())),
 		)
 
-		res, err := getter.Get()
+		res, err := getter.GetAll()
 		if err != nil {
 			logger.Error("failed to get commands " + "error: " + err.Error())
 			w.WriteHeader(http.StatusInternalServerError)

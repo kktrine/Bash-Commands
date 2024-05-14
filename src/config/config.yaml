@@ -1,4 +1,4 @@
-log_file_path: "/home/ekaterina/GitHub/Bash-Commands/log/log.txt"
+log_file_path: "./log/log.txt"
 http_server:
   address: "0.0.0.0:8080"
   timeout: 4s

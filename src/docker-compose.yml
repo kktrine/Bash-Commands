@@ -1,0 +1,33 @@
+version: '3.8'
+services:
+  commands-server:
+    build: ..
+    command: ./postgres.sh db ./commands --docker
+    ports:
+      - 8080:8080
+    depends_on:
+      - db
+    environment:
+      - DB_PASSWORD=postgres
+      - DB_USER=postgres
+      - DB_TABLE=banners
+    networks:
+      - banner-network
+
+  db:
+    restart: always
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=banners
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    ports:
+      - 5434:5432
+    networks:
+      - banner-network
+
+networks:
+  banner-network:
+    driver: bridge

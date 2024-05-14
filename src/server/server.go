@@ -4,13 +4,14 @@ import (
 	"bash-commands/internal/storage"
 	delete_one "bash-commands/server/delete_one"
 	"bash-commands/server/get_all_commands"
+	"bash-commands/server/get_one_command"
 	"bash-commands/server/post_new_command"
 	"bash-commands/server/post_run_command"
+	"bash-commands/server/stop_process"
 	"context"
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -23,7 +24,9 @@ type Server struct {
 	postNewCommandHandler http.HandlerFunc
 	postRunCommandHandler http.HandlerFunc
 	getCommandsHandler    http.HandlerFunc
+	getOneCommandHandler  http.HandlerFunc
 	deleteHandler         http.HandlerFunc
+	stopHandler           http.HandlerFunc
 }
 
 func NewServer(log *slog.Logger, st *storage.Storage) *Server {
@@ -34,6 +37,8 @@ func NewServer(log *slog.Logger, st *storage.Storage) *Server {
 	srv.postRunCommandHandler = post_run_command.NewRunner(srv.logger, srv.st)
 	srv.getCommandsHandler = get_all_commands.NewGetter(srv.logger, srv.st)
 	srv.deleteHandler = delete_one.NewDeleter(srv.logger, srv.st)
+	srv.getOneCommandHandler = get_one_command.NewGetter(srv.logger, srv.st)
+	srv.stopHandler = stop_process.NewStopper(srv.logger, srv.st)
 
 	srv.mux.HandleFunc("/", srv.mainHandler)
 	srv.server.Handler = srv.recoverer(srv.server.Handler)
@@ -45,16 +50,19 @@ func NewServer(log *slog.Logger, st *storage.Storage) *Server {
 
 func (s Server) mainHandler(w http.ResponseWriter, r *http.Request) {
 	switch {
-	case r.Method == "GET" && r.URL.Path == "/":
+	case r.Method == "GET" && r.URL.Path == "/": // get all
 		s.getCommandsHandler(w, r)
-	case r.Method == "POST" && r.URL.Path == "/":
+	case r.Method == "POST" && r.URL.Path == "/": // post new
 		s.postNewCommandHandler(w, r)
-	case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/"):
+	case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/stop/"): // stop by pid
+		s.stopHandler(w, r)
+	case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/"): //run
 		s.postRunCommandHandler(w, r)
-	case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/"):
-		http.Error(w, "Method Not Implemented", http.StatusNotImplemented)
-	case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/"):
+	case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/"): // get by id
+		s.getOneCommandHandler(w, r)
+	case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/"): // delete from db
 		s.deleteHandler(w, r)
+
 	default:
 		http.Error(w, "Method Not Exist", http.StatusMethodNotAllowed)
 	}
@@ -77,7 +85,7 @@ func (s Server) logRequest(next http.Handler) http.Handler {
 			r.Method + " " +
 				r.URL.Path + " " +
 				r.RemoteAddr + " " +
-				r.UserAgent() +
+				r.UserAgent() + " " +
 				r.RequestURI +
 				time.Since(t).String(),
 		)
@@ -102,28 +110,4 @@ func (s Server) Stop(ctx context.Context) error {
 		s.logger.Error("error stopping DB connection: " + err.Error())
 	}
 	return s.server.Shutdown(ctx)
-}
-
-// GetHandler - обработчик для GET запросов
-func getHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Привет, мир!"))
-}
-
-// PostHandler - обработчик для POST запросов
-func postHandler(w http.ResponseWriter, r *http.Request) {
-	// Обработка POST запроса
-	w.Write([]byte("POST запрос успешно обработан!"))
-}
-
-// DeleteHandler - обработчик для DELETE запросов
-func deleteHandler(w http.ResponseWriter, r *http.Request) {
-	// Обработка DELETE запроса
-	id := strings.TrimPrefix(r.URL.Path, "/")
-	idInt, err := strconv.Atoi(id)
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
-	_ = idInt
-	w.Write([]byte("DELETE запрос успешно обработан! " + id))
 }

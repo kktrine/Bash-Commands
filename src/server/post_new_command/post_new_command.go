@@ -2,11 +2,13 @@ package post_new_command
 
 import (
 	"bash-commands/internal/storage/storageErrors"
+	"bash-commands/server/command_result"
 	"bash-commands/server/reqid"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
+	"os/exec"
 )
 
 type Request struct {
@@ -22,7 +24,9 @@ type Response struct {
 }
 
 type CommandPoster interface {
-	Post(command string) (*Response, error)
+	AddAndRun(command string) (int64, *exec.Cmd, error)
+	Start(cmd *exec.Cmd) (int, error)
+	Exec(cmd *exec.Cmd, pid int, id int64) (*command_result.CommandResult, error)
 }
 
 func NewPoster(log *slog.Logger, poster CommandPoster) http.HandlerFunc {
@@ -38,33 +42,41 @@ func NewPoster(log *slog.Logger, poster CommandPoster) http.HandlerFunc {
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
 			logger.Error("failed to parse request " + "error: " + err.Error())
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(&Response{Error: "failed to parse request"})
+			http.Error(w, "failed to parse request", http.StatusBadRequest)
 			return
 		}
 
-		res, err := poster.Post(req.Command)
+		id, cmd, err := poster.AddAndRun(req.Command)
+
 		if errors.Is(err, storageErrors.ErrDuplicateEntry) {
 			logger.Error("failed to post_new_command command + " + "error: " + err.Error())
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(&Response{Error: "command already exists"})
+			http.Error(w, "command already exists", http.StatusBadRequest)
 			return
 		}
 		if err != nil {
 			logger.Error("failed to post_new_command command " + "error: " + err.Error())
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(&Response{Error: "failed to post_new_command command"})
+			http.Error(w, "failed to post_new_command", http.StatusInternalServerError)
 			return
 		}
-
+		pid, err := poster.Start(cmd)
 		if err != nil {
 			logger.Error("failed to run command", "error", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(&Response{Error: "failed to run command"})
+			http.Error(w, "failed to run command", http.StatusInternalServerError)
 			return
 		}
-
-		w.WriteHeader(http.StatusOK)
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(&Response{ID: id, PID: pid})
+		flusher.Flush()
+		res, err := poster.Exec(cmd, pid, id)
+		if err != nil {
+			logger.Error("failed to exec command", "error", err)
+			json.NewEncoder(w).Encode(&Response{Error: "failed to run command, maybe process was killed"})
+			return
+		}
 		json.NewEncoder(w).Encode(res)
 		return
 	}

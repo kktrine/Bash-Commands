@@ -1,6 +1,7 @@
 package config
 
 import (
+	"flag"
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/joho/godotenv"
 	"log"
@@ -18,12 +19,17 @@ type HTTPServer struct {
 	Address     string        `yaml:"address" env-default:"localhost:8080"`
 	Timeout     time.Duration `yaml:"timeout" env-default:"4s"`
 	IdleTimeout time.Duration `yaml:"idle_timeout" env-default:"60s"`
-	//User        string        `yaml:"user" env-required:"true"`
-	//Password    string        `yaml:"password" env-required:"true" env:"HTTP_SERVER_PASSWORD"`
 }
 
 func MustLoad() *Config {
-	err := godotenv.Load(".env")
+	docker := flag.Bool("docker", false, "set if you run program in docker")
+	flag.Parse()
+	var err error
+	if !*docker {
+		err = godotenv.Load(".env")
+	} else {
+		err = godotenv.Load(".env_docker")
+	}
 	if err != nil {
 		log.Fatalf("Error loading .env file: %s", err)
 	}
