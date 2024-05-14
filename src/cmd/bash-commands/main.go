@@ -1,11 +1,12 @@
 package main
 
 import (
-	"bash-commands/internal/config"
 	"bash-commands/internal/logs"
 	"bash-commands/internal/storage"
 	"bash-commands/server"
 	"context"
+	"flag"
+	"github.com/joho/godotenv"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,12 +14,21 @@ import (
 )
 
 func main() {
-
-	cfg := config.MustLoad()
-	log := logs.SetupLogger(cfg.LogFilePath)
-	st := storage.New(cfg.Postgres)
+	docker := flag.Bool("docker", false, "set this if you run program in docker")
+	flag.Parse()
+	var err error
+	if !*docker {
+		err = godotenv.Load(".env")
+	} else {
+		err = godotenv.Load(".env_docker")
+	}
+	if err != nil {
+		panic(err.Error())
+	}
+	log := logs.SetupLogger(os.Getenv("LOG_PATH"))
+	st := storage.New(os.Getenv("POSTGRES"))
 	srv := server.NewServer(log, st)
-	go srv.Start(cfg.Address)
+	go srv.Start(os.Getenv("HOST"))
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)

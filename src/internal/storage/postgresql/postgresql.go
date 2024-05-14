@@ -158,6 +158,10 @@ func (p Postgres) Delete(id int64) (bool, error) {
 		return false, err
 	}
 	res, err := tx.Exec("DELETE FROM commands where id = $1", id)
+	found, err := res.RowsAffected()
+	if found == 0 {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
@@ -165,10 +169,7 @@ func (p Postgres) Delete(id int64) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	found, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
+
 	return found > 0, nil
 }
 
