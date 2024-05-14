@@ -2,7 +2,7 @@ FROM golang:latest
 
 ENV GOPATH=/
 
-COPY .. ./
+COPY ./ ./
 
 # install psql
 RUN apt-get update

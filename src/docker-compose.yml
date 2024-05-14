@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   commands-server:
-    build: ..
+    build: ./
     command: ./postgres.sh db ./commands --docker
     ports:
       - 8080:8080
@@ -10,9 +10,9 @@ services:
     environment:
       - DB_PASSWORD=postgres
       - DB_USER=postgres
-      - DB_TABLE=banners
+      - DB_TABLE=commands
     networks:
-      - banner-network
+      - commands-network
 
   db:
     restart: always
@@ -20,14 +20,14 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=banners
-    volumes:
-      - ./data:/var/lib/postgresql/data
+      - POSTGRES_DB=commands
+#    volumes:
+#      - ./data:/var/lib/postgresql/data
     ports:
       - 5434:5432
     networks:
-      - banner-network
+      - commands-network
 
 networks:
-  banner-network:
+  commands-network:
     driver: bridge
