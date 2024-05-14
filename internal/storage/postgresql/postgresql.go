@@ -1,6 +1,7 @@
 package postgresql
 
 import (
+	"bash-commands/internal/cashe"
 	"bash-commands/internal/storage/storageErrors"
 	"bufio"
 	"database/sql"
@@ -11,10 +12,12 @@ import (
 	"io"
 	"log"
 	"os/exec"
+	"strconv"
 )
 
 type Postgres struct {
-	Db *sql.DB
+	Db          *sql.DB
+	RunningProc *cashe.Cache
 }
 
 type Command struct {
@@ -25,7 +28,7 @@ type Command struct {
 type Outputs struct {
 	id        int64
 	CommandId int64
-	Pid       int64
+	Pid       int
 	Output    string
 }
 
@@ -79,7 +82,7 @@ func NewPostgresRepository(bdAttributes string) *Postgres {
 	if err != nil {
 		panic(err)
 	}
-	return &Postgres{Db: db}
+	return &Postgres{Db: db, RunningProc: cashe.NewCache()}
 }
 
 func (p Postgres) InsertCommand(command string) (int64, error) {
@@ -115,6 +118,8 @@ func (p Postgres) ExecCommand(id int64, command string) (*CommandRunResult, erro
 	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback()
+
 	cmd := exec.Command("bash", "-c", command)
 
 	stdout, err := cmd.StdoutPipe()
@@ -125,18 +130,21 @@ func (p Postgres) ExecCommand(id int64, command string) (*CommandRunResult, erro
 	if err != nil {
 		return nil, err
 	}
+
+	var stdoutStr, stderrStr string
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
+
 	pid := cmd.Process.Pid
-	var stdoutStr, stderrStr string
+	p.RunningProc.AddOne(pid)
 	go func(stdout io.Reader) {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
 			stdoutStr += line + "\n"
 			tx.Exec("INSERT INTO outputs (command_id, pid, output) values ($1, $2, $3);",
-				id, pid, line)
+				id, cmd.Process.Pid, line)
 		}
 	}(stdout)
 
@@ -146,18 +154,21 @@ func (p Postgres) ExecCommand(id int64, command string) (*CommandRunResult, erro
 			line := scanner.Text()
 			stderrStr += line + "\n"
 			tx.Exec("INSERT INTO outputs (command_id, pid, output) values ($1, $2, $3);",
-				id, pid, line)
+				id, cmd.Process.Pid, line)
 		}
 	}(stderr)
 
 	if err := cmd.Wait(); err != nil {
-		fmt.Println("Ошибка выполнения команды:", err)
-		return nil, err
+		if stderrStr == "" {
+			fmt.Println("Ошибка выполнения команды:", stderrStr)
+			return nil, err
+		}
 	}
-
+	p.RunningProc.Stop(pid)
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+
 	return &CommandRunResult{
 		Id:           id,
 		Pid:          pid,
@@ -181,6 +192,30 @@ func (p Postgres) RunCommandById(id int64) (*CommandRunResult, error) {
 	return p.ExecCommand(id, command)
 }
 
+func (p Postgres) SelectAll() (*[]Command, error) {
+	rows, err := p.Db.Query("SELECT id, command FROM commands")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var commands []Command
+	for rows.Next() {
+		var command Command
+		err := rows.Scan(&command.Id, &command.Command)
+		if err != nil {
+			log.Fatal(err)
+		}
+		commands = append(commands, command)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return &commands, nil
+}
+
 func (p *Postgres) Stop() error {
+	for pid := range p.RunningProc.Pids {
+		exec.Command("kill", "-0", strconv.Itoa(pid))
+	}
 	return p.Db.Close()
 }

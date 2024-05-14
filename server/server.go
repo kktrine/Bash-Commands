@@ -20,6 +20,7 @@ type Server struct {
 	st                    *storage.Storage
 	postNewCommandHandler http.HandlerFunc
 	postRunCommandHandler http.HandlerFunc
+	getCommandsHandler    http.HandlerFunc
 }
 
 func NewServer(log *slog.Logger, st *storage.Storage) *Server {

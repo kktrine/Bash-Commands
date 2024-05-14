@@ -1,48 +1,39 @@
 package cashe
 
 import (
-	"os"
 	"sync"
-	"time"
 )
 
 type Cache struct {
 	sync.RWMutex
-	defaultExpiration time.Duration
-	cleanupInterval   time.Duration
-	Items             map[string]Item
-}
-type Item struct {
-	Id        int64
-	Pid       int64
-	CreatedAt time.Time
-	Content   string
+	Pids map[int]interface{}
 }
 
 func NewCache() *Cache {
 
-	items := make(map[string]Item)
-	exp, err := time.ParseDuration(os.Getenv("CACHE_EXPIRATION"))
-	if err != nil {
-		panic("Can't parse CACHE_EXPIRATION: " + err.Error())
-	}
-	clean, err := time.ParseDuration(os.Getenv("CACHE_CLEANUP_INTERVAL"))
-	if err != nil {
-		panic("Can't parse CACHE_CLEANUP_INTERVAL: " + err.Error())
-	}
+	pids := make(map[int]interface{})
 	cache := Cache{
-		Items:             items,
-		defaultExpiration: exp,
-		cleanupInterval:   clean,
+		Pids: pids,
 	}
-
-	cache.startGC()
 
 	return &cache
 }
 
-func (c *Cache) AddOne(command Item) {
+func (c *Cache) AddOne(pid int) {
 	c.Lock()
 	defer c.Unlock()
+	c.Pids[pid] = nil
+}
 
+func (c *Cache) Stop(pid int) {
+	c.Lock()
+	defer c.Unlock()
+	delete(c.Pids, pid)
+}
+
+func (c *Cache) Check(pid int) bool {
+	c.Lock()
+	defer c.Unlock()
+	_, ok := c.Pids[pid]
+	return ok
 }

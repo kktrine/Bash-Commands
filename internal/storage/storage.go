@@ -2,13 +2,16 @@ package storage
 
 import (
 	"bash-commands/internal/storage/postgresql"
+	"bash-commands/server/get_all_commands"
 	"bash-commands/server/post_new_command"
 	"bash-commands/server/post_run_command"
+	"errors"
+	"os/exec"
+	"strconv"
 )
 
 type Storage struct {
-	db          *postgresql.Postgres
-	runningProc map[int64]interface{}
+	db *postgresql.Postgres
 }
 
 func New(db string) *Storage {
@@ -47,6 +50,22 @@ func (s Storage) Run(id int64) (*post_run_command.Response, error) {
 	}, nil
 }
 
+func (s Storage) Kill(pid int) error {
+	if !s.db.RunningProc.Check(pid) {
+		return errors.New("pid not exists")
+	}
+	checkCmd := exec.Command("kill", "-0", strconv.Itoa(pid))
+	err := checkCmd.Run()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s Storage) Stop() error {
 	return s.db.Stop()
+}
+
+func (s Storage) Get() (*get_all_commands.Response, error) {
+	return
 }
