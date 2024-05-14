@@ -67,5 +67,22 @@ func (s Storage) Stop() error {
 }
 
 func (s Storage) Get() (*get_all_commands.Response, error) {
-	return
+	res, err := s.db.SelectAll()
+	if err != nil {
+		return nil, err
+	}
+	ans := get_all_commands.Response{}
+
+	for _, commands := range *res {
+		command := get_all_commands.Command{
+			Id:      commands.Id,
+			Command: commands.Command,
+		}
+		ans.Commands = append(ans.Commands, command)
+	}
+	return &ans, nil
+}
+
+func (s Storage) Delete(id int64) (bool, error) {
+	return s.db.Delete(id)
 }

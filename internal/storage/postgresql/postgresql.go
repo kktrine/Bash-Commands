@@ -213,9 +213,34 @@ func (p Postgres) SelectAll() (*[]Command, error) {
 	return &commands, nil
 }
 
-func (p *Postgres) Stop() error {
+func (p Postgres) Stop() error {
 	for pid := range p.RunningProc.Pids {
 		exec.Command("kill", "-0", strconv.Itoa(pid))
 	}
 	return p.Db.Close()
+}
+
+func (p Postgres) Delete(id int64) (bool, error) {
+	tx, err := p.Db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec("DELETE FROM outputs where command_id = $1", id)
+	if err != nil {
+		return false, err
+	}
+	res, err := tx.Exec("DELETE FROM commands where id = $1", id)
+	if err != nil {
+		return false, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return false, err
+	}
+	found, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return found > 0, nil
 }

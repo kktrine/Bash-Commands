@@ -2,6 +2,8 @@ package server
 
 import (
 	"bash-commands/internal/storage"
+	delete_one "bash-commands/server/delete_one"
+	"bash-commands/server/get_all_commands"
 	"bash-commands/server/post_new_command"
 	"bash-commands/server/post_run_command"
 	"context"
@@ -21,6 +23,7 @@ type Server struct {
 	postNewCommandHandler http.HandlerFunc
 	postRunCommandHandler http.HandlerFunc
 	getCommandsHandler    http.HandlerFunc
+	deleteHandler         http.HandlerFunc
 }
 
 func NewServer(log *slog.Logger, st *storage.Storage) *Server {
@@ -29,6 +32,8 @@ func NewServer(log *slog.Logger, st *storage.Storage) *Server {
 
 	srv.postNewCommandHandler = post_new_command.NewPoster(srv.logger, srv.st)
 	srv.postRunCommandHandler = post_run_command.NewRunner(srv.logger, srv.st)
+	srv.getCommandsHandler = get_all_commands.NewGetter(srv.logger, srv.st)
+	srv.deleteHandler = delete_one.NewDeleter(srv.logger, srv.st)
 
 	srv.mux.HandleFunc("/", srv.mainHandler)
 	srv.server.Handler = srv.recoverer(srv.server.Handler)
@@ -41,13 +46,15 @@ func NewServer(log *slog.Logger, st *storage.Storage) *Server {
 func (s Server) mainHandler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == "GET" && r.URL.Path == "/":
-		getHandler(w, r)
+		s.getCommandsHandler(w, r)
 	case r.Method == "POST" && r.URL.Path == "/":
 		s.postNewCommandHandler(w, r)
 	case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/"):
 		s.postRunCommandHandler(w, r)
+	case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/"):
+		http.Error(w, "Method Not Implemented", http.StatusNotImplemented)
 	case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/"):
-		deleteHandler(w, r)
+		s.deleteHandler(w, r)
 	default:
 		http.Error(w, "Method Not Exist", http.StatusMethodNotAllowed)
 	}
